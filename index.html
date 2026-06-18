@@ -114,7 +114,6 @@
       position: relative;
     }
     
-    /* 베스트 게시글 및 페이지네이션 스타일 추가 */
     .best-post {
       border: 2px solid var(--best-color);
       box-shadow: 0 0 25px rgba(74, 222, 128, 0.15);
@@ -292,11 +291,10 @@
   let editingPosts = {};
   let editingComments = {};
   
-  // ★ 추가된 상태 변수들 ★
   const POSTS_PER_PAGE = 5;
   let currentPage = 1;
   let isBestPostExpanded = false;
-  let openCommentForms = {}; // { postId: true }
+  let openCommentForms = {};
 
   function fmt(ts) {
     return new Date(ts).toLocaleString("ko-KR", {
@@ -328,6 +326,29 @@
   function getReactionTotal(post) {
     if (!post.reactions) return 0;
     return Object.values(post.reactions).reduce((acc, users) => acc + (users ? users.length : 0), 0);
+  }
+
+  // ★ 변경된 부분 1: 한국 시간 기준(KST) 오늘 받은 반응 수만 골라내어 계산하는 함수 추가 ★
+  function getTodayReactionCount(post) {
+    if (!post.reactions) return 0;
+    let count = 0;
+    // KST(UTC+9) 기준 현재 날짜 문자열(YYYY-MM-DD) 생성
+    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    
+    Object.values(post.reactions).forEach(users => {
+      if (Array.isArray(users)) {
+        users.forEach(u => {
+          // 타임스탬프 정보가 포함된 객체 형태일 경우에만 오늘 날짜인지 비교
+          if (u && typeof u === 'object' && u.at) {
+            const targetStr = new Date(u.at + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            if (targetStr === nowStr) {
+              count++;
+            }
+          }
+        });
+      }
+    });
+    return count;
   }
 
   onSnapshot(collection(db, "posts"), (snapshot) => {
@@ -370,7 +391,7 @@
 
       authorInput.value = ""; postPasswordInput.value = "";
       titleInput.value = ""; contentInput.value = "";
-      currentPage = 1; // 새 글 등록 시 1페이지로 이동
+      currentPage = 1;
     } catch (e) {
       console.error(e);
       alert("게시글 등록에 실패했습니다.");
@@ -386,16 +407,21 @@
   });
 
   searchInput.addEventListener("input", () => {
-    currentPage = 1; // 검색할 때 1페이지로 리셋
+    currentPage = 1;
     render();
   });
 
   function render() {
     const q = searchInput.value.trim().toLowerCase();
     
+    // ★ 변경된 부분 2: 검색 필터링 매핑 시 '오늘 반응 점수'와 '전체 반응 점수'를 동시에 부여 ★
     const filtered = postsData
       .filter(p => `${p.nickname} ${p.title} ${p.content}`.toLowerCase().includes(q))
-      .map(p => ({ ...p, _score: getReactionTotal(p) }));
+      .map(p => ({ 
+        ...p, 
+        _totalScore: getReactionTotal(p),
+        _todayScore: getTodayReactionCount(p)
+      }));
 
     if (filtered.length === 0) {
       postList.innerHTML = `
@@ -406,32 +432,33 @@
       return;
     }
 
+    // ★ 변경된 부분 3: 인기글 산출 조건 교체 ★
+    // 1순위: 오늘 반응 수 많은 순 정렬 -> 2순위: 동률일 때 전체 반응 수 많은 순 정렬
     const sortedForBest = [...filtered].sort((a, b) => {
-      if (b._score !== a._score) return b._score - a._score;
+      if (b._todayScore !== a._todayScore) return b._todayScore - a._todayScore;
+      if (b._totalScore !== a._totalScore) return b._totalScore - a._totalScore;
       return b.createdAt - a.createdAt;
     });
 
     let bestPost = null;
     let otherPosts = [];
 
-    if (sortedForBest.length > 0 && sortedForBest[0]._score > 0 && q === "") {
+    // 오늘 반응 수나 전체 반응 수가 1개 이상이라도 존재할 때 인기글 선정 활성화
+    if (sortedForBest.length > 0 && (sortedForBest[0]._todayScore > 0 || sortedForBest[0]._totalScore > 0) && q === "") {
       bestPost = sortedForBest[0];
       otherPosts = sortedForBest.slice(1).sort((a, b) => b.createdAt - a.createdAt);
     } else {
       otherPosts = sortedForBest.sort((a, b) => b.createdAt - a.createdAt);
     }
 
-    // ★ 페이징 로직 적용 ★
     const totalPages = Math.ceil(otherPosts.length / POSTS_PER_PAGE);
     const paginatedPosts = otherPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
 
     let html = "";
     if (bestPost) html += generatePostHTML(bestPost, true);
     
-    // 페이지네이션 된 포스트만 렌더링
     html += paginatedPosts.map(p => generatePostHTML(p, false)).join("");
     
-    // 페이지 버튼 생성
     if (totalPages > 1) {
       html += `<div class="pagination">`;
       for (let i = 1; i <= totalPages; i++) {
@@ -444,7 +471,6 @@
   }
 
   function generatePostHTML(post, isBest) {
-    // ★ 인기글 접기 모드 렌더링 ★
     if (isBest && !isBestPostExpanded) {
       return `
         <article class="post best-post collapsed" data-best-toggle="true">
@@ -460,9 +486,10 @@
       .filter(c => c.postId === post.id)
       .sort((a, b) => a.createdAt - b.createdAt);
 
+    // ★ 변경된 부분 4: 이전 방식(문자열 배열)과 타임스탬프 방식(객체 배열) 데이터 모두 활성화 상태가 조회되도록 호환 처리 ★
     const reactionsHtml = REACTIONS.map(r => {
       const users = post.reactions?.[r] || [];
-      const isActive = users.includes(clientId);
+      const isActive = users.some(u => (typeof u === 'object' ? u.uid === clientId : u === clientId));
       return `
         <button class="reaction ${isActive ? "active" : ""}" data-react="${post.id}:${r}">
           ${r} <span class="count">${users.length}</span>
@@ -576,7 +603,6 @@
   }
 
   postList.addEventListener("click", async (e) => {
-    // 0. 인기글 접기/펴기 이벤트 (div나 버튼 아무데나 클릭해도 작동)
     const bestToggle = e.target.closest("[data-best-toggle]");
     if (bestToggle) {
       isBestPostExpanded = !isBestPostExpanded;
@@ -587,15 +613,13 @@
     const target = e.target.closest("button");
     if (!target) return;
 
-    // ★ 페이지네이션 클릭 ★
     if (target.dataset.page) {
       currentPage = Number(target.dataset.page);
       render();
-      window.scrollTo({ top: 0, behavior: 'smooth' }); // 페이지 이동시 위로 부드럽게 스크롤
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    // ★ 댓글 작성 폼 토글 ★
     if (target.dataset.commentToggle) {
       const postId = target.dataset.commentToggle;
       openCommentForms[postId] = !openCommentForms[postId];
@@ -603,6 +627,7 @@
       return;
     }
 
+    // ★ 변경된 부분 5: 반응 이모지 클릭 시 타임스탬프(`at`)를 포함한 객체 정보로 Firebase 저장 구조 업그레이드 ★
     if (target.dataset.react) {
       const [postId, emoji] = target.dataset.react.split(":");
       const postRef = doc(db, "posts", postId);
@@ -610,14 +635,14 @@
       if(!post) return;
       
       const users = post.reactions?.[emoji] || [];
-      const hasReacted = users.includes(clientId);
+      const existingReaction = users.find(u => (typeof u === 'object' ? u.uid === clientId : u === clientId));
       const updateField = `reactions.${emoji}`;
       
       try {
-        if (hasReacted) {
-          await updateDoc(postRef, { [updateField]: arrayRemove(clientId) });
+        if (existingReaction) {
+          await updateDoc(postRef, { [updateField]: arrayRemove(existingReaction) });
         } else {
-          await updateDoc(postRef, { [updateField]: arrayUnion(clientId) });
+          await updateDoc(postRef, { [updateField]: arrayUnion({ uid: clientId, at: Date.now() }) });
         }
       } catch (err) {
         console.error("반응 처리 오류:", err);
@@ -702,7 +727,6 @@
         $(`comment-name-${postId}`).value = "";
         $(`comment-pw-${postId}`).value = "";
         $(`comment-content-${postId}`).value = "";
-        // 작성 완료 시 폼 다시 숨기기
         openCommentForms[postId] = false;
       } catch (err) {
         console.error("댓글 등록 오류:", err);
