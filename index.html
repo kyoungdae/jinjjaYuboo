@@ -31,7 +31,6 @@
     }
     .wrap { max-width: 1240px; margin: 0 auto; padding: 22px 16px 40px; }
     
-    /* 배너 스타일 수정 */
     .banner {
       position: relative;
       overflow: hidden;
@@ -115,12 +114,21 @@
       position: relative;
     }
     
-    /* 베스트 게시글 스타일 */
+    /* 베스트 게시글 및 페이지네이션 스타일 추가 */
     .best-post {
       border: 2px solid var(--best-color);
       box-shadow: 0 0 25px rgba(74, 222, 128, 0.15);
       background: linear-gradient(180deg, rgba(30, 45, 40, .95), rgba(20, 24, 36, .95));
     }
+    .best-post.collapsed {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      transition: background 0.2s ease;
+    }
+    .best-post.collapsed:hover { background: linear-gradient(180deg, rgba(40, 55, 50, .95), rgba(25, 29, 41, .95)); }
     .best-badge {
       display: inline-flex; align-items: center; justify-content: center;
       background: var(--best-color);
@@ -130,6 +138,15 @@
       font-weight: 900;
       font-size: 14px;
       margin-bottom: 14px;
+    }
+    .pagination {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+    }
+    .page-btn {
+      padding: 8px 14px; border-radius: 10px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); color: var(--text); cursor: pointer; font-size: 14px;
+    }
+    .page-btn.active {
+      background: var(--accent); color: white; border-color: var(--accent);
     }
 
     .post-head {
@@ -156,7 +173,7 @@
     .reaction span.count { color: var(--muted); font-weight: 700; }
     
     .comments { margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 12px; }
-    .comments h3 { margin: 0 0 10px; font-size: 15px; }
+    .comments h3 { margin: 0; font-size: 15px; }
     .comment-list { display: grid; gap: 8px; margin-bottom: 12px; }
     .comment {
       padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08);
@@ -176,7 +193,6 @@
     .edit-box { margin-top: 12px; padding: 12px; border-radius: 18px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
     .edit-grid { display: grid; gap: 10px; }
     .empty { border: 1px dashed rgba(255, 255, 255, .16); border-radius: 18px; padding: 26px; text-align: center; color: var(--muted); line-height: 1.65; }
-    .footer { margin-top: 16px; color: var(--muted); font-size: 12px; line-height: 1.6; opacity: .92; text-align: center; }
 
     @media (max-width: 940px) {
       .grid { grid-template-columns: 1fr; }
@@ -239,7 +255,6 @@
     getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, collectionGroup, arrayUnion, arrayRemove 
   } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-  // TODO: 향후 Firestore Security Rules를 설정하여 인증되지 않은 사용자의 무분별한 쓰기 및 권한 없는 데이터 수정을 제한해야 합니다.
   const firebaseConfig = {
     apiKey: "AIzaSyCJJ9VFYoYxBOfFtgtF59SefDYVw6OR60Y",
     authDomain: "jjinyuboo.firebaseapp.com",
@@ -256,7 +271,7 @@
   const ADMIN_PASSWORD = "thomas0617";
   const REACTIONS = ["👍", "🤣", "🛢️", "🤬", "🧜🏾‍♀️"];
   const ADJECTIVES = ["비운의", "행복한", "따듯한", "통 속의", "야근하는", "간장이 안 짠", "설거지하는", "눈물이 앞을 가리는", "흘리는", "기가 죽은", "담 걸린", "청소하는","등짝 맞는", "배고픈", "소파를 뺏긴", "분리수거하는", "육아 중인", "거실에 누운", "아빠가 된", "용돈 받는","비자금 들킨", "눈치보는", "찬밥을 먹는", "레고 밟는", "형광등 가는", "심부름가는"];
-  const NOUNS = ["근육맨", "주무관", "남편", "유부남", "위고버", "훌리건", "가자지", "안드로진", "튜브 오너", "비혼주의자", "가장", "돌쇠", "집사", "백수희망자", "날스괴 신도", "생존자", "낙하산", "세탁술사", "현금인출기", "청소마스터", "반찬평론가", "가계부감독", "리얼충", "기사님",, "대리기사", "왕용사"];
+  const NOUNS = ["근육맨", "주무관", "남편", "유부남", "위고버", "훌리건", "가자지", "안드로진", "튜브 오너", "비혼주의자", "가장", "돌쇠", "집사", "백수희망자", "날스괴 신도", "생존자", "낙하산", "세탁술사", "현금인출기", "청소마스터", "반찬평론가", "가계부감독", "리얼충", "기사님", "대리기사", "왕용사"];
 
   const $ = (id) => document.getElementById(id);
   const authorInput = $("authorInput");
@@ -266,7 +281,6 @@
   const searchInput = $("searchInput");
   const postList = $("postList");
 
-  // 클라이언트별 반응 구분을 위한 고유 세션 ID 생성
   let clientId = sessionStorage.getItem("jubu_clientId");
   if (!clientId) {
     clientId = Math.random().toString(36).substring(2, 15);
@@ -275,12 +289,15 @@
 
   let postsData = [];
   let commentsData = [];
-  let editingPosts = {};    // { postId: true }
-  let editingComments = {}; // { commentId: true }
+  let editingPosts = {};
+  let editingComments = {};
+  
+  // ★ 추가된 상태 변수들 ★
+  const POSTS_PER_PAGE = 5;
+  let currentPage = 1;
+  let isBestPostExpanded = false;
+  let openCommentForms = {}; // { postId: true }
 
-  // -----------------------------------------
-  // 유틸리티 함수
-  // -----------------------------------------
   function fmt(ts) {
     return new Date(ts).toLocaleString("ko-KR", {
       year: "numeric", month: "2-digit", day: "2-digit",
@@ -313,9 +330,6 @@
     return Object.values(post.reactions).reduce((acc, users) => acc + (users ? users.length : 0), 0);
   }
 
-  // -----------------------------------------
-  // 실시간 데이터 수신 (Firestore onSnapshot)
-  // -----------------------------------------
   onSnapshot(collection(db, "posts"), (snapshot) => {
     postsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     render();
@@ -326,9 +340,6 @@
     render();
   }, (err) => console.error("댓글 로드 오류:", err));
 
-  // -----------------------------------------
-  // 게시글 작성
-  // -----------------------------------------
   $("publishBtn").addEventListener("click", async () => {
     const pw = postPasswordInput.value;
     const title = titleInput.value.trim();
@@ -359,6 +370,7 @@
 
       authorInput.value = ""; postPasswordInput.value = "";
       titleInput.value = ""; contentInput.value = "";
+      currentPage = 1; // 새 글 등록 시 1페이지로 이동
     } catch (e) {
       console.error(e);
       alert("게시글 등록에 실패했습니다.");
@@ -373,15 +385,14 @@
     titleInput.value = ""; contentInput.value = "";
   });
 
-  searchInput.addEventListener("input", render);
+  searchInput.addEventListener("input", () => {
+    currentPage = 1; // 검색할 때 1페이지로 리셋
+    render();
+  });
 
-  // -----------------------------------------
-  // UI 렌더링
-  // -----------------------------------------
   function render() {
     const q = searchInput.value.trim().toLowerCase();
     
-    // 1. 검색어 필터링 및 점수 계산
     const filtered = postsData
       .filter(p => `${p.nickname} ${p.title} ${p.content}`.toLowerCase().includes(q))
       .map(p => ({ ...p, _score: getReactionTotal(p) }));
@@ -395,8 +406,6 @@
       return;
     }
 
-    // 2. 베스트 게시글 선정 (검색어 없을 때만 전체 중 산정)
-    // 점수 내림차순 -> 작성일 내림차순 정렬
     const sortedForBest = [...filtered].sort((a, b) => {
       if (b._score !== a._score) return b._score - a._score;
       return b.createdAt - a.createdAt;
@@ -412,20 +421,45 @@
       otherPosts = sortedForBest.sort((a, b) => b.createdAt - a.createdAt);
     }
 
-    // 3. HTML 생성
+    // ★ 페이징 로직 적용 ★
+    const totalPages = Math.ceil(otherPosts.length / POSTS_PER_PAGE);
+    const paginatedPosts = otherPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
+
     let html = "";
     if (bestPost) html += generatePostHTML(bestPost, true);
-    html += otherPosts.map(p => generatePostHTML(p, false)).join("");
+    
+    // 페이지네이션 된 포스트만 렌더링
+    html += paginatedPosts.map(p => generatePostHTML(p, false)).join("");
+    
+    // 페이지 버튼 생성
+    if (totalPages > 1) {
+      html += `<div class="pagination">`;
+      for (let i = 1; i <= totalPages; i++) {
+        html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+      }
+      html += `</div>`;
+    }
     
     postList.innerHTML = html;
   }
 
   function generatePostHTML(post, isBest) {
+    // ★ 인기글 접기 모드 렌더링 ★
+    if (isBest && !isBestPostExpanded) {
+      return `
+        <article class="post best-post collapsed" data-best-toggle="true">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="best-badge" style="margin: 0;">🏆</div>
+            <h3 style="margin: 0; font-size: 16px; color: var(--best-color);">${escapeHtml(post.title)} - 🤩인기글 보기🤩</h3>
+          </div>
+        </article>
+      `;
+    }
+
     const postComments = commentsData
       .filter(c => c.postId === post.id)
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    // 반응 버튼 HTML
     const reactionsHtml = REACTIONS.map(r => {
       const users = post.reactions?.[r] || [];
       const isActive = users.includes(clientId);
@@ -436,7 +470,6 @@
       `;
     }).join("");
 
-    // 댓글 HTML
     const commentsHtml = postComments.map(c => {
       if (editingComments[c.id]) {
         return `
@@ -468,7 +501,6 @@
       `;
     }).join("");
 
-    // 게시글 수정 폼 HTML
     const editBox = editingPosts[post.id] ? `
       <div class="edit-box">
         <div class="edit-grid">
@@ -488,9 +520,16 @@
       </div>
     ` : "";
 
+    const showCommentForm = openCommentForms[post.id];
+
     return `
       <article class="post ${isBest ? 'best-post' : ''}">
-        ${isBest ? `<div class="best-badge">🏆 오늘의 유부</div>` : ''}
+        ${isBest ? `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div class="best-badge">🏆 오늘의 유부</div>
+            <button class="ghost" data-best-toggle="true" style="padding:4px 8px; font-size:12px;">접기 ⬆️</button>
+          </div>
+        ` : ''}
         <div class="post-head">
           <div>
             <h3 class="post-title">${escapeHtml(post.title)}</h3>
@@ -514,11 +553,14 @@
         ${editBox}
 
         <section class="comments">
-          <h3>댓글</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3>댓글</h3>
+            <button class="ghost" data-comment-toggle="${post.id}" style="padding: 4px 10px; font-size: 13px;">💬 댓글 작성</button>
+          </div>
           <div class="comment-list">
             ${commentsHtml || `<div class="muted" style="font-size:13px;">작성된 댓글이 없습니다.</div>`}
           </div>
-          <div class="comment-form">
+          <div class="comment-form" style="display: ${showCommentForm ? 'grid' : 'none'};">
             <div class="comment-form-inputs">
               <input id="comment-name-${post.id}" type="text" maxlength="24" placeholder="닉네임(자동생성)" />
               <input id="comment-pw-${post.id}" type="password" maxlength="4" placeholder="암호(숫자 4자리)" inputmode="numeric" />
@@ -533,14 +575,34 @@
     `;
   }
 
-  // -----------------------------------------
-  // 이벤트 위임 (이벤트 핸들러 통합)
-  // -----------------------------------------
   postList.addEventListener("click", async (e) => {
+    // 0. 인기글 접기/펴기 이벤트 (div나 버튼 아무데나 클릭해도 작동)
+    const bestToggle = e.target.closest("[data-best-toggle]");
+    if (bestToggle) {
+      isBestPostExpanded = !isBestPostExpanded;
+      render();
+      return;
+    }
+
     const target = e.target.closest("button");
     if (!target) return;
 
-    // --- 1. 게시글 반응 토글 ---
+    // ★ 페이지네이션 클릭 ★
+    if (target.dataset.page) {
+      currentPage = Number(target.dataset.page);
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // 페이지 이동시 위로 부드럽게 스크롤
+      return;
+    }
+
+    // ★ 댓글 작성 폼 토글 ★
+    if (target.dataset.commentToggle) {
+      const postId = target.dataset.commentToggle;
+      openCommentForms[postId] = !openCommentForms[postId];
+      render();
+      return;
+    }
+
     if (target.dataset.react) {
       const [postId, emoji] = target.dataset.react.split(":");
       const postRef = doc(db, "posts", postId);
@@ -562,7 +624,6 @@
       }
     }
 
-    // --- 2. 게시글 수정 준비 ---
     else if (target.dataset.edit) {
       const postId = target.dataset.edit;
       const post = postsData.find(p => p.id === postId);
@@ -575,12 +636,10 @@
       editingPosts[postId] = true;
       render();
     }
-    // 게시글 수정 취소
     else if (target.dataset.editCancel) {
       delete editingPosts[target.dataset.editCancel];
       render();
     }
-    // 게시글 수정 저장
     else if (target.dataset.editSave) {
       const postId = target.dataset.editSave;
       const newTitle = $(`edit-title-${postId}`).value.trim();
@@ -595,7 +654,6 @@
           title: newTitle, content: newContent, updatedAt: Date.now()
         });
         delete editingPosts[postId];
-        // render()는 onSnapshot이 알아서 처리
       } catch (err) {
         console.error(err);
         alert("수정 실패!");
@@ -603,7 +661,6 @@
       }
     }
 
-    // --- 3. 게시글 삭제 ---
     else if (target.dataset.delete) {
       const postId = target.dataset.delete;
       const post = postsData.find(p => p.id === postId);
@@ -616,15 +673,12 @@
       if (!confirm("정말 이 게시글을 삭제하시겠습니까?")) return;
       
       try {
-        // 서브컬렉션(댓글)은 클라이언트에서 직접 지우기 복잡하므로 
-        // 문서만 삭제합니다. (실제 서비스에선 Cloud Functions 사용 권장)
         await deleteDoc(doc(db, "posts", postId));
       } catch (err) {
         console.error("삭제 오류:", err);
       }
     }
 
-    // --- 4. 댓글 작성 ---
     else if (target.dataset.commentAdd) {
       const postId = target.dataset.commentAdd;
       const nickname = $(`comment-name-${postId}`).value.trim() || randomNick();
@@ -648,6 +702,8 @@
         $(`comment-name-${postId}`).value = "";
         $(`comment-pw-${postId}`).value = "";
         $(`comment-content-${postId}`).value = "";
+        // 작성 완료 시 폼 다시 숨기기
+        openCommentForms[postId] = false;
       } catch (err) {
         console.error("댓글 등록 오류:", err);
         alert("등록 실패!");
@@ -656,7 +712,6 @@
       }
     }
 
-    // --- 5. 댓글 수정 ---
     else if (target.dataset.commentEdit) {
       const [postId, commentId] = target.dataset.commentEdit.split(":");
       const comment = commentsData.find(c => c.id === commentId);
@@ -669,12 +724,10 @@
       editingComments[commentId] = true;
       render();
     }
-    // 댓글 수정 취소
     else if (target.dataset.commentCancel) {
       delete editingComments[target.dataset.commentCancel];
       render();
     }
-    // 댓글 수정 저장
     else if (target.dataset.commentSave) {
       const [postId, commentId] = target.dataset.commentSave.split(":");
       const newContent = $(`edit-comment-content-${commentId}`).value.trim();
@@ -692,7 +745,6 @@
       }
     }
 
-    // --- 6. 댓글 삭제 ---
     else if (target.dataset.commentDelete) {
       const [postId, commentId] = target.dataset.commentDelete.split(":");
       const comment = commentsData.find(c => c.id === commentId);
@@ -711,7 +763,6 @@
       }
     }
   });
-
 </script>
 </body>
 </html>
