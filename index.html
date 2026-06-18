@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>"진짜" 유부 갤러리</title>
   <style>
     :root {
@@ -27,10 +27,6 @@
         radial-gradient(circle at top right, rgba(103, 212, 193, .12), transparent 20%),
         var(--bg);
       color: var(--text);
-
-
-
-      
       min-height: 100vh;
     }
     .wrap { max-width: 1240px; margin: 0 auto; padding: 22px 16px 40px; }
@@ -49,6 +45,7 @@
       align-items: flex-end;
       padding: 26px;
       margin-bottom: 18px;
+      width: 100%; /* 너비 꽉 차게 고정 */
     }
     .banner h1 {
       margin: 0 0 12px 0;
@@ -68,13 +65,14 @@
       word-break: keep-all;
     }
     
-    .grid { display: grid; grid-template-columns: .92fr 1.08fr; gap: 18px; align-items: start; }
+    .grid { display: grid; grid-template-columns: .92fr 1.08fr; gap: 18px; align-items: start; width: 100%; }
     .card {
       background: linear-gradient(180deg, var(--panel), var(--panel2));
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       padding: 18px;
+      width: 100%; /* 카드 내부 너비 고정 */
     }
     .card h2 { margin: 0 0 14px 0; font-size: 20px; letter-spacing: -.02em; }
     label { display: block; margin: 0 0 6px; color: var(--muted); font-size: 13px; }
@@ -109,13 +107,16 @@
     .muted { color: var(--muted); }
     
     .tools { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
-    .post-list { display: grid; gap: 14px; }
+    .post-list { display: grid; gap: 14px; width: 100%; }
     .post {
       background: linear-gradient(180deg, rgba(27, 33, 49, .95), rgba(20, 24, 36, .95));
       border: 1px solid var(--line);
       border-radius: 20px;
       padding: 16px;
       position: relative;
+      width: 100%; /* 게시글 카드도 너비 고정 */
+      word-break: break-all; /* 모바일에서 긴 영문/기호로 인한 가로 스크롤 방지 */
+      overflow-wrap: break-word;
     }
     
     .best-post {
@@ -180,6 +181,8 @@
     .comment-list { display: grid; gap: 8px; margin-bottom: 12px; }
     .comment {
       padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08);
+      word-break: break-all;
+      overflow-wrap: break-word;
     }
     .comment-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
     .comment-info { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -200,7 +203,9 @@
     @media (max-width: 940px) {
       .grid { grid-template-columns: 1fr; }
       .post-head { flex-direction: column; }
-      .banner { min-height: 260px; padding: 20px; }
+      /* 모바일 디바이스 최적화 여백 */
+      .wrap { padding: 12px 10px 30px; }
+      .banner { min-height: 200px; padding: 18px; border-radius: 20px; }
     }
   </style>
 </head>
@@ -332,17 +337,14 @@
     return Object.values(post.reactions).reduce((acc, users) => acc + (users ? users.length : 0), 0);
   }
 
-  // ★ 변경된 부분 1: 한국 시간 기준(KST) 오늘 받은 반응 수만 골라내어 계산하는 함수 추가 ★
   function getTodayReactionCount(post) {
     if (!post.reactions) return 0;
     let count = 0;
-    // KST(UTC+9) 기준 현재 날짜 문자열(YYYY-MM-DD) 생성
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
     
     Object.values(post.reactions).forEach(users => {
       if (Array.isArray(users)) {
         users.forEach(u => {
-          // 타임스탬프 정보가 포함된 객체 형태일 경우에만 오늘 날짜인지 비교
           if (u && typeof u === 'object' && u.at) {
             const targetStr = new Date(u.at + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
             if (targetStr === nowStr) {
@@ -418,7 +420,6 @@
   function render() {
     const q = searchInput.value.trim().toLowerCase();
     
-    // ★ 변경된 부분 2: 검색 필터링 매핑 시 '오늘 반응 점수'와 '전체 반응 점수'를 동시에 부여 ★
     const filtered = postsData
       .filter(p => `${p.nickname} ${p.title} ${p.content}`.toLowerCase().includes(q))
       .map(p => ({ 
@@ -436,8 +437,6 @@
       return;
     }
 
-    // ★ 변경된 부분 3: 인기글 산출 조건 교체 ★
-    // 1순위: 오늘 반응 수 많은 순 정렬 -> 2순위: 동률일 때 전체 반응 수 많은 순 정렬
     const sortedForBest = [...filtered].sort((a, b) => {
       if (b._todayScore !== a._todayScore) return b._todayScore - a._todayScore;
       if (b._totalScore !== a._totalScore) return b._totalScore - a._totalScore;
@@ -447,7 +446,6 @@
     let bestPost = null;
     let otherPosts = [];
 
-    // 오늘 반응 수나 전체 반응 수가 1개 이상이라도 존재할 때 인기글 선정 활성화
     if (sortedForBest.length > 0 && (sortedForBest[0]._todayScore > 0 || sortedForBest[0]._totalScore > 0) && q === "") {
       bestPost = sortedForBest[0];
       otherPosts = sortedForBest.slice(1).sort((a, b) => b.createdAt - a.createdAt);
@@ -490,7 +488,6 @@
       .filter(c => c.postId === post.id)
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    // ★ 변경된 부분 4: 이전 방식(문자열 배열)과 타임스탬프 방식(객체 배열) 데이터 모두 활성화 상태가 조회되도록 호환 처리 ★
     const reactionsHtml = REACTIONS.map(r => {
       const users = post.reactions?.[r] || [];
       const isActive = users.some(u => (typeof u === 'object' ? u.uid === clientId : u === clientId));
@@ -631,7 +628,6 @@
       return;
     }
 
-    // ★ 변경된 부분 5: 반응 이모지 클릭 시 타임스탬프(`at`)를 포함한 객체 정보로 Firebase 저장 구조 업그레이드 ★
     if (target.dataset.react) {
       const [postId, emoji] = target.dataset.react.split(":");
       const postRef = doc(db, "posts", postId);
