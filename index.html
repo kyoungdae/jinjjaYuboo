@@ -27,6 +27,10 @@
         radial-gradient(circle at top right, rgba(103, 212, 193, .12), transparent 20%),
         var(--bg);
       color: var(--text);
+
+
+
+      
       min-height: 100vh;
     }
     .wrap { max-width: 1240px; margin: 0 auto; padding: 22px 16px 40px; }
@@ -585,7 +589,7 @@
             <button class="ghost" data-comment-toggle="${post.id}" style="padding: 4px 10px; font-size: 13px;">💬 댓글 작성</button>
           </div>
           <div class="comment-list">
-            ${commentsHtml || `<div class="muted" style="font-size:13px;">작성된 댓글이 없습니다.</div>`}
+            ${commentsHtml || `<div class="muted" style="font-size:13px;">댓글이 없으니 빨리 달아줘라 휴먼!.</div>`}
           </div>
           <div class="comment-form" style="display: ${showCommentForm ? 'grid' : 'none'};">
             <div class="comment-form-inputs">
